@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getPageParams, getSearchValue, jsonResponse, requireAdmin } from '@/lib/api';
 import type { SettlementRow, SettlementStatus, TablePage } from '@/lib/types';
+import { decryptNullable } from '@/lib/decrypt';
 
 type SettlementDbRow = {
   id: string;
@@ -21,7 +22,7 @@ type SettlementDbRow = {
   particles: { email: string } | null;
 };
 
-type StigmaRow = { user_id: string; user_name: string; email: string };
+type StigmaRow = { user_id: string; user_name: string; payment_email: string };
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -31,7 +32,10 @@ export async function GET(request: NextRequest) {
 
   let query = auth.supabaseAdmin
     .from('settlements')
-    .select('id, site_id, receiver_user_id, status, period_start, period_end, gross_amount, platform_fee_amount, pg_fee_amount, pg_fee_vat_amount, settlement_amount, confirmed_at, completed_at, memo, rhizomes(site_label), particles(email)', { count: 'exact' })
+    .select(
+      'id, site_id, receiver_user_id, status, period_start, period_end, gross_amount, platform_fee_amount, pg_fee_amount, pg_fee_vat_amount, settlement_amount, confirmed_at, completed_at, memo, rhizomes(site_label), particles(email)',
+      { count: 'exact' },
+    )
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -45,7 +49,7 @@ export async function GET(request: NextRequest) {
   const rows = (result.data || []) as unknown as SettlementDbRow[];
   const receiverIds = rows.map((row) => row.receiver_user_id);
   const stigmaResult = receiverIds.length
-    ? await auth.supabaseAdmin.from('stigmas').select('user_id, user_name, email').in('user_id', receiverIds)
+    ? await auth.supabaseAdmin.from('stigmas').select('user_id, user_name, payment_email').in('user_id', receiverIds)
     : { data: [] as StigmaRow[] };
   const stigmaMap = new Map((stigmaResult.data || []).map((row) => [row.user_id, row as StigmaRow]));
 
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest) {
     return {
       id: row.id,
       siteLabel: row.rhizomes?.site_label || null,
-      receiverEmail: row.particles?.email || stigma?.email || null,
+      receiverEmail: row.particles?.email || decryptNullable(stigma?.payment_email) || null,
       receiverName: stigma?.user_name || null,
       status: row.status,
       periodStart: row.period_start,

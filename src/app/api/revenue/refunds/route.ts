@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getPageParams, jsonResponse, requireAdmin } from '@/lib/api';
 import type { TablePage, TransactionRow } from '@/lib/types';
+import { decryptNullable } from '@/lib/decrypt';
 
 type PaymentRow = {
   id: string;
@@ -15,7 +16,7 @@ type PaymentRow = {
   target_type: string;
 };
 
-type StigmaRow = { user_id: string; email: string; user_name: string };
+type StigmaRow = { user_id: string; payment_email: string; user_name: string };
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest) {
 
   const result = await auth.supabaseAdmin
     .from('payments')
-    .select('id, created_at, approved_at, buyer_user_id, amount, refunded_amount, refunded_at, status, payment_type, target_type', { count: 'exact' })
+    .select(
+      'id, created_at, approved_at, buyer_user_id, amount, refunded_amount, refunded_at, status, payment_type, target_type',
+      { count: 'exact' },
+    )
     .not('refunded_at', 'is', null)
     .order('refunded_at', { ascending: false })
     .range(from, to);
@@ -34,7 +38,7 @@ export async function GET(request: NextRequest) {
   const rows = (result.data || []) as PaymentRow[];
   const buyerIds = rows.map((row) => row.buyer_user_id);
   const stigmaResult = buyerIds.length
-    ? await auth.supabaseAdmin.from('stigmas').select('user_id, email, user_name').in('user_id', buyerIds)
+    ? await auth.supabaseAdmin.from('stigmas').select('user_id, payment_email, user_name').in('user_id', buyerIds)
     : { data: [] as StigmaRow[] };
   const buyerMap = new Map((stigmaResult.data || []).map((row) => [row.user_id, row as StigmaRow]));
 
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
       id: row.id,
       createdAt: row.refunded_at || row.created_at,
       approvedAt: row.approved_at,
-      buyerEmail: buyer?.email || null,
+      buyerEmail: decryptNullable(buyer?.payment_email) || null,
       buyerName: buyer?.user_name || null,
       siteLabel: null,
       amount: Number(row.amount || 0),

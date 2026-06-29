@@ -22,14 +22,14 @@ import {
   Typography,
   TableContainer,
 } from '@mui/material';
-import PageHeader from '@/components/PageHeader';
-import LoadingBox from '@/components/LoadingBox';
-import EmptyState from '@/components/EmptyState';
-import StatusChip from '@/components/StatusChip';
 import { apiFetch } from '@/lib/clientApi';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import { siteTypeLabel } from '@/lib/labels';
 import type { SiteRow, TablePage } from '@/lib/types';
+import PageHeader from '@/components/PageHeader';
+import LoadingBox from '@/components/LoadingBox';
+import EmptyState from '@/components/EmptyState';
+import StatusChip from '@/components/StatusChip';
 
 export default function SitesPage() {
   const [tab, setTab] = useState<'blog' | 'community'>('blog');
@@ -48,7 +48,9 @@ export default function SitesPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, tab]);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
@@ -81,8 +83,9 @@ export default function SitesPage() {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             fullWidth
+            size="small"
           />
-          <Button type="submit" variant="contained" sx={{ minWidth: 120 }}>
+          <Button type="submit" size="small" variant="contained" sx={{ minWidth: 120 }}>
             검색
           </Button>
         </Stack>
@@ -147,7 +150,7 @@ export default function SitesPage() {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setSelected(null)}>
+          <Button type="button" size="small" onClick={() => setSelected(null)}>
             닫기
           </Button>
         </DialogActions>

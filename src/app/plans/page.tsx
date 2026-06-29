@@ -1,13 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Snackbar, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import PageHeader from '@/components/PageHeader';
-import LoadingBox from '@/components/LoadingBox';
-import EmptyState from '@/components/EmptyState';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Snackbar,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { apiFetch } from '@/lib/clientApi';
 import { formatMoney } from '@/lib/utils';
 import type { PlanRow } from '@/lib/types';
+import PageHeader from '@/components/PageHeader';
+import LoadingBox from '@/components/LoadingBox';
+import EmptyState from '@/components/EmptyState';
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<PlanRow[] | null>(null);
@@ -17,10 +33,13 @@ export default function PlansPage() {
 
   const load = () => {
     setPlans(null);
-    apiFetch<{ items: PlanRow[] }>('/api/plans').then((result) => setPlans(result.items)).catch(() => setPlans([]));
+    apiFetch<{ items: PlanRow[] }>('/api/plans')
+      .then((result) => setPlans(result.items))
+      .catch(() => setPlans([]));
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, []);
 
@@ -44,7 +63,11 @@ export default function PlansPage() {
   return (
     <Stack spacing={3}>
       <PageHeader title="요금제 설정" description="plans 테이블 기준 사이트 개설 요금제 가격 관리" />
-      {!plans ? <LoadingBox /> : plans.length === 0 ? <EmptyState message="요금제가 없습니다." /> : (
+      {!plans ? (
+        <LoadingBox />
+      ) : plans.length === 0 ? (
+        <EmptyState message="요금제가 없습니다." />
+      ) : (
         <Paper>
           <Table>
             <TableHead>
@@ -81,13 +104,18 @@ export default function PlansPage() {
                 onChange={(event) => setPrice(event.target.value.replace(/[^0-9]/g, ''))}
                 slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                 fullWidth
+                size="small"
               />
             </Stack>
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setSelected(null)}>취소</Button>
-          <Button type="button" variant="contained" onClick={handleSave}>수정</Button>
+          <Button type="button" size="small" onClick={() => setSelected(null)}>
+            취소
+          </Button>
+          <Button type="button" size="small" variant="contained" onClick={handleSave}>
+            수정
+          </Button>
         </DialogActions>
       </Dialog>
 

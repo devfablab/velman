@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
-import AuthGate from '@/components/AuthGate';
 import { getSupabaseBrowser } from '@/lib/supabase';
+import AuthGate from '@/components/AuthGate';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('test1@test.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +37,9 @@ export default function LoginPage() {
         <Paper component="form" onSubmit={handleSubmit} sx={{ width: '100%', maxWidth: 420, p: 4 }}>
           <Stack spacing={3}>
             <Stack spacing={0.5}>
-              <Typography variant="h4" fontWeight={800}>velman</Typography>
+              <Typography variant="h4" fontWeight={800}>
+                velman
+              </Typography>
               <Typography color="text.secondary">데브허브 관리자 로그인</Typography>
             </Stack>
             {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
@@ -47,6 +49,7 @@ export default function LoginPage() {
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
               fullWidth
+              size="small"
             />
             <TextField
               label="비밀번호"
@@ -55,8 +58,9 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               fullWidth
+              size="small"
             />
-            <Button type="submit" variant="contained" size="large" disabled={submitting}>
+            <Button type="submit" variant="contained" size="small" disabled={submitting}>
               로그인
             </Button>
           </Stack>

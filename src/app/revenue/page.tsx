@@ -15,14 +15,14 @@ import {
   TableRow,
   TableContainer,
 } from '@mui/material';
-import PageHeader from '@/components/PageHeader';
-import LoadingBox from '@/components/LoadingBox';
-import EmptyState from '@/components/EmptyState';
-import StatusChip from '@/components/StatusChip';
 import { apiFetch } from '@/lib/clientApi';
 import { paymentStatusLabel, settlementStatusLabel } from '@/lib/labels';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import type { SettlementRow, TablePage, TransactionRow } from '@/lib/types';
+import PageHeader from '@/components/PageHeader';
+import LoadingBox from '@/components/LoadingBox';
+import EmptyState from '@/components/EmptyState';
+import StatusChip from '@/components/StatusChip';
 
 type RevenueTab = 'transactions' | 'refunds' | 'scheduled' | 'confirmed' | 'completed';
 
@@ -44,6 +44,7 @@ export default function RevenuePage() {
 
   useEffect(() => {
     if (isSettlementTab) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettlements(null);
       apiFetch<TablePage<SettlementRow>>(`/api/revenue/settlements?page=${page}&status=${tab}`)
         .then(setSettlements)
@@ -144,7 +145,7 @@ export default function RevenuePage() {
             <TableBody>
               {transactions.items.map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.buyerName || row.buyerEmail || '-'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.buyerEmail || '-'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.siteLabel || '-'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.paymentType}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>

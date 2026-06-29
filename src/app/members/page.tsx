@@ -21,13 +21,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import type { MemberDetail, MemberRow, TablePage } from '@/lib/types';
+import { apiFetch } from '@/lib/clientApi';
+import { formatDateTime } from '@/lib/utils';
 import PageHeader from '@/components/PageHeader';
 import LoadingBox from '@/components/LoadingBox';
 import EmptyState from '@/components/EmptyState';
 import StatusChip from '@/components/StatusChip';
-import { apiFetch } from '@/lib/clientApi';
-import { formatDateTime } from '@/lib/utils';
-import type { MemberDetail, MemberRow, TablePage } from '@/lib/types';
 
 export default function MembersPage() {
   const [keyword, setKeyword] = useState('');
@@ -46,7 +46,9 @@ export default function MembersPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
@@ -77,8 +79,9 @@ export default function MembersPage() {
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             fullWidth
+            size="small"
           />
-          <Button type="submit" variant="contained" sx={{ minWidth: 120 }}>
+          <Button type="submit" size="small" variant="contained" sx={{ minWidth: 120 }}>
             검색
           </Button>
         </Stack>
@@ -187,7 +190,7 @@ export default function MembersPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button type="button" onClick={() => setSelected(null)}>
+          <Button type="button" size="small" onClick={() => setSelected(null)}>
             닫기
           </Button>
         </DialogActions>
