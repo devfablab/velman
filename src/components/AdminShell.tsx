@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Box, Button, Container, Divider, List, ListItemButton, ListItemText, Paper, Stack, Typography } from '@mui/material';
-import { getSupabaseBrowser } from '@/lib/supabase';
+import { usePathname } from 'next/navigation';
+import { Box, Container, Divider, List, ListItemButton, ListItemText, Paper, Typography } from '@mui/material';
 
 const menus = [
   { href: '/dashboard', label: '대시보드' },
@@ -15,20 +14,13 @@ const menus = [
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  const handleSignOut = async () => {
-    const supabase = getSupabaseBrowser();
-    await supabase.auth.signOut();
-    router.replace('/login');
-  };
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <Paper elevation={0} square sx={{ width: 260, borderRight: '1px solid', borderColor: 'divider' }}>
         <Box sx={{ p: 3 }}>
-          <Typography variant="h5" fontWeight={800}>velman</Typography>
-          <Typography variant="body2" color="text.secondary">데브허브 관리자</Typography>
+          <Typography variant="h5">velman</Typography>
+          <Typography variant="subtitle2">데브허브 관리앱</Typography>
         </Box>
         <Divider />
         <List sx={{ px: 2, py: 2 }}>
@@ -49,16 +41,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </List>
       </Paper>
 
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Paper elevation={0} square sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Container maxWidth="xl">
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 2 }}>
-              <Typography variant="body2" color="text.secondary">로컬 관리자</Typography>
-              <Button type="button" variant="outlined" size="small" onClick={handleSignOut}>로그아웃</Button>
-            </Stack>
-          </Container>
-        </Paper>
-        <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Container maxWidth="xl" sx={{ py: 4, flex: 1 }}>
           {children}
         </Container>
       </Box>

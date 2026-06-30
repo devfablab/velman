@@ -30,6 +30,7 @@ import PageHeader from '@/components/PageHeader';
 import LoadingBox from '@/components/LoadingBox';
 import EmptyState from '@/components/EmptyState';
 import StatusChip from '@/components/StatusChip';
+import Anchor from '@/components/Anchor';
 
 export default function SitesPage() {
   const [tab, setTab] = useState<'blog' | 'community'>('blog');
@@ -64,7 +65,7 @@ export default function SitesPage() {
   return (
     <Stack spacing={3}>
       <PageHeader title="개설된 사이트 관리" description="개설된 블로그/커뮤니티 목록과 운영 상태 확인" />
-      <Paper sx={{ px: 2 }}>
+      <Paper sx={{ p: 0 }}>
         <Tabs
           value={tab}
           onChange={(_event, value: 'blog' | 'community') => {
@@ -135,17 +136,36 @@ export default function SitesPage() {
         <DialogContent dividers>
           {selected ? (
             <Stack spacing={1.2}>
-              <Typography>사이트명: {selected.siteLabel}</Typography>
-              <Typography>주소: /{selected.siteKey}</Typography>
-              <Typography>종류: {siteTypeLabel(selected.siteType)}</Typography>
-              <Typography>개설일: {formatDateTime(selected.createdAt)}</Typography>
-              <Typography>가입 승인된 회원수: {selected.approvedMemberCount.toLocaleString('ko-KR')}명</Typography>
-              <Typography>
-                요금제: {selected.planLabel ? `${selected.planLabel} / ${formatMoney(selected.planPrice)}` : '-'}
+              <Typography variant="h6" component="h2">
+                {selected.siteLabel}
               </Typography>
-              <Typography>총 수익: {formatMoney(selected.totalRevenue)}</Typography>
-              <Typography>총 환불액: {formatMoney(selected.totalRefunded)}</Typography>
-              <Typography>폐쇄/중지 상태: {selected.status}</Typography>
+              <Typography variant="subtitle2">
+                <Anchor href={`https://velhub-kr.vercel.app/${selected.siteKey}`}>
+                  {siteTypeLabel(selected.siteType)}{' '}
+                  {selected.planLabel ? `(${selected.planLabel} / ${formatMoney(selected.planPrice)})` : null}
+                </Anchor>
+              </Typography>
+              <Typography variant="subtitle2">{formatDateTime(selected.createdAt)} 개설됨</Typography>
+              <Stack gap={5} direction="row">
+                <Stack gap={1} direction="row">
+                  <Typography variant="subtitle2">가입 승인된 회원수</Typography>
+                  <Typography variant="body2">{selected.approvedMemberCount.toLocaleString('ko-KR')} 명</Typography>
+                </Stack>
+                <Stack gap={1} direction="row">
+                  <Typography variant="subtitle2">폐쇄/중지 상태</Typography>
+                  <Typography variant="body2">{selected.status}</Typography>
+                </Stack>
+              </Stack>
+              <Stack gap={5} direction="row">
+                <Stack gap={1} direction="row">
+                  <Typography variant="subtitle2">총 수익</Typography>
+                  <Typography variant="body2">{formatMoney(selected.totalRevenue)}</Typography>
+                </Stack>
+                <Stack gap={1} direction="row">
+                  <Typography variant="subtitle2">총 환불액</Typography>
+                  <Typography variant="body2">{formatMoney(selected.totalRefunded)}</Typography>
+                </Stack>
+              </Stack>
             </Stack>
           ) : null}
         </DialogContent>

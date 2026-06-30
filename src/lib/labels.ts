@@ -26,3 +26,18 @@ export function siteTypeLabel(value: string) {
   };
   return labels[value] || value;
 }
+
+export function paymentTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    plan_billing: '요금제',
+    membership_blog: '블로그 멤버십',
+    subscription_board: '게시판 구독',
+    subscription_series: '연재 구독',
+    donation_site: '블로그 후원',
+    donation_board: '게시판 후원',
+    donation_series: '연재 후원',
+    donation_post: '포스팅 후원',
+    purchase_post: '포스팅 구매',
+  };
+  return labels[value] || value;
+}

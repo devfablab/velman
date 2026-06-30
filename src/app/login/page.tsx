@@ -37,9 +37,7 @@ export default function LoginPage() {
         <Paper component="form" onSubmit={handleSubmit} sx={{ width: '100%', maxWidth: 420, p: 4 }}>
           <Stack spacing={3}>
             <Stack spacing={0.5}>
-              <Typography variant="h4" fontWeight={800}>
-                velman
-              </Typography>
+              <Typography variant="h4">velman</Typography>
               <Typography color="text.secondary">데브허브 관리자 로그인</Typography>
             </Stack>
             {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}

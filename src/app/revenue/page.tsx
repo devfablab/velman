@@ -16,7 +16,7 @@ import {
   TableContainer,
 } from '@mui/material';
 import { apiFetch } from '@/lib/clientApi';
-import { paymentStatusLabel, settlementStatusLabel } from '@/lib/labels';
+import { paymentStatusLabel, paymentTypeLabel, settlementStatusLabel } from '@/lib/labels';
 import { formatDateTime, formatMoney } from '@/lib/utils';
 import type { SettlementRow, TablePage, TransactionRow } from '@/lib/types';
 import PageHeader from '@/components/PageHeader';
@@ -69,7 +69,7 @@ export default function RevenuePage() {
   return (
     <Stack spacing={3}>
       <PageHeader title="수익/정산 관리" description="거래, 환불, 정산 상태 확인" />
-      <Paper sx={{ px: 2 }}>
+      <Paper sx={{ p: 0 }}>
         <Tabs value={tab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
           <Tab value="transactions" label="전체 거래 내역" />
           <Tab value="refunds" label="전체 환불 내역" />
@@ -103,7 +103,7 @@ export default function RevenuePage() {
                 {settlements.items.map((row) => (
                   <TableRow key={row.id} hover>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.siteLabel || '-'}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.receiverName || row.receiverEmail || '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.receiverEmail || '-'}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {formatDateTime(row.periodStart)} ~ {formatDateTime(row.periodEnd)}
                     </TableCell>
@@ -147,7 +147,7 @@ export default function RevenuePage() {
                 <TableRow key={row.id} hover>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.buyerEmail || '-'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.siteLabel || '-'}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.paymentType}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{paymentTypeLabel(row.paymentType)}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     <StatusChip label={paymentStatusLabel(row.status)} />
                   </TableCell>

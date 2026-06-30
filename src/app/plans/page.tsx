@@ -13,6 +13,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -68,8 +69,8 @@ export default function PlansPage() {
       ) : plans.length === 0 ? (
         <EmptyState message="요금제가 없습니다." />
       ) : (
-        <Paper>
-          <Table>
+        <TableContainer component={Paper}>
+          <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>구분</TableCell>
@@ -87,7 +88,7 @@ export default function PlansPage() {
               ))}
             </TableBody>
           </Table>
-        </Paper>
+        </TableContainer>
       )}
 
       <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} maxWidth="xs" fullWidth>
@@ -95,17 +96,23 @@ export default function PlansPage() {
         <DialogContent dividers>
           {selected ? (
             <Stack spacing={2}>
-              <Typography>구분: {selected.categoryLabel}</Typography>
-              <Typography>요금제명: {selected.planLabel}</Typography>
-              <Typography>현재 가격: {formatMoney(selected.price)}</Typography>
-              <TextField
-                label="변경 가격"
-                value={price}
-                onChange={(event) => setPrice(event.target.value.replace(/[^0-9]/g, ''))}
-                slotProps={{ htmlInput: { inputMode: 'numeric' } }}
-                fullWidth
-                size="small"
-              />
+              <Typography variant="subtitle2">
+                {selected.categoryLabel} / {selected.planLabel}
+              </Typography>
+              <Stack gap={2} direction="row" alignItems="center">
+                <Typography variant="subtitle2">현재 가격</Typography>
+                <Typography variant="body2">{formatMoney(selected.price)}</Typography>
+              </Stack>
+              <Stack gap={1}>
+                <Typography variant="subtitle2">변경 가격</Typography>
+                <TextField
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value.replace(/[^0-9]/g, ''))}
+                  slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+                  fullWidth
+                  size="small"
+                />
+              </Stack>
             </Stack>
           ) : null}
         </DialogContent>

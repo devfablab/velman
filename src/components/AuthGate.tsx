@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Box, CircularProgress } from '@mui/material';
+import { Box } from '@mui/material';
 import { getSupabaseBrowser } from '@/lib/supabase';
+import LoadingBox from './LoadingBox';
 
 type GateState = 'checking' | 'ready';
 
@@ -48,7 +49,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   if (state === 'checking') {
     return (
       <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <CircularProgress />
+        <LoadingBox />
       </Box>
     );
   }

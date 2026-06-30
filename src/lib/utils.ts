@@ -11,7 +11,7 @@ export function toNumber(value: unknown) {
 }
 
 export function formatMoney(value: number | null | undefined) {
-  return `${Number(value || 0).toLocaleString('ko-KR')}원`;
+  return `${Number(value || 0).toLocaleString('ko-KR')} 원`;
 }
 
 export function formatDateTime(value: string | null | undefined) {

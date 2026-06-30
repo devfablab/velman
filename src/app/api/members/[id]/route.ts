@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { errorResponse, jsonResponse, requireAdmin } from '@/lib/api';
 import { getAccountStatus, isAdultFromBirthDate } from '@/lib/utils';
 import type { MemberDetail, MemberSiteRow } from '@/lib/types';
+import { decrypt } from '@/lib/decrypt';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -54,7 +55,9 @@ export async function GET(request: NextRequest, context: Params) {
     supabaseAdmin.from('chorogons').select('birth_date').eq('user_id', stigma.user_id).maybeSingle(),
     supabaseAdmin
       .from('rhizome_stigmas')
-      .select('site_id, role, is_approval, approval_at, is_block, kicked_at, banned_at, withdrawn_at, rejected_at, rhizomes(id, site_key, site_label, site_type)')
+      .select(
+        'site_id, role, is_approval, approval_at, is_block, kicked_at, banned_at, withdrawn_at, rejected_at, rhizomes(id, site_key, site_label, site_type)',
+      )
       .eq('user_id', stigma.id)
       .order('created_at', { ascending: false }),
   ]);
@@ -64,7 +67,8 @@ export async function GET(request: NextRequest, context: Params) {
 
   const chorogon = chorogonResult.data as ChorogonRow | null;
   const birthDate = chorogon?.birth_date || null;
-  const adult = isAdultFromBirthDate(birthDate);
+  const birth = birthDate ? decrypt(birthDate) : null;
+  const adult = isAdultFromBirthDate(birth);
   const rows = (siteResult.data || []) as unknown as RhizomeStigmaRow[];
   const sites: MemberSiteRow[] = rows.map((row) => ({
     siteId: row.site_id,
@@ -80,10 +84,10 @@ export async function GET(request: NextRequest, context: Params) {
   const payload: MemberDetail = {
     id: stigma.id,
     particleId: stigma.user_id,
-    email: stigma.email,
-    userName: stigma.user_name,
+    email: decrypt(stigma.email),
+    userName: decrypt(stigma.user_name),
     createdAt: stigma.created_at,
-    birthDate,
+    birthDate: birth,
     isMinor: adult === null ? null : !adult,
     accountStatus: getAccountStatus({}),
     joinedSiteCount: sites.length,

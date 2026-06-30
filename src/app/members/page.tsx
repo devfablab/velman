@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -75,7 +76,7 @@ export default function MembersPage() {
       <Paper component="form" onSubmit={handleSearch} sx={{ p: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <TextField
-            label="이메일 또는 활동명"
+            placeholder="이메일 또는 활동명"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             fullWidth
@@ -131,34 +132,63 @@ export default function MembersPage() {
             <LoadingBox />
           ) : (
             <Stack spacing={3}>
-              <Box>
-                <Typography fontWeight={700} sx={{ mb: 1 }}>
+              <Stack gap={2}>
+                <Typography variant="h6" component="h2">
                   기본 정보
                 </Typography>
-                <Stack spacing={1}>
-                  <Typography>이메일: {selected.email}</Typography>
-                  <Typography>활동명: {selected.userName}</Typography>
-                  <Typography>생년월일: {selected.birthDate || '-'}</Typography>
-                  <Typography>
-                    미성년자 여부: {selected.isMinor === null ? '-' : selected.isMinor ? '미성년자' : '성인'}
-                  </Typography>
-                  <Typography>계정 상태: {selected.accountStatus}</Typography>
-                  <Typography>가입일: {formatDateTime(selected.createdAt)}</Typography>
+                <Stack gap={1}>
+                  <Stack gap={2} direction="row">
+                    <Typography variant="subtitle2">이메일</Typography>
+                    <Typography variant="body2">{selected.email} </Typography>
+                  </Stack>
+                  <Stack gap={2} direction="row">
+                    <Typography variant="subtitle2">활동명</Typography>
+                    <Typography variant="body2">
+                      {selected.userName} ({formatDateTime(selected.createdAt)} 가입)
+                    </Typography>
+                  </Stack>
+                  {selected.birthDate ? (
+                    <Stack gap={2} direction="row" alignItems="center">
+                      <Typography variant="subtitle2">생년월일</Typography>
+                      <Typography variant="body2">{selected.birthDate}</Typography>
+                      {selected.isMinor === null ? null : (
+                        <Chip
+                          size="small"
+                          color={selected.isMinor ? 'error' : 'primary'}
+                          label={selected.isMinor ? '수익활동 불가' : '수익활동 가능'}
+                        />
+                      )}
+                    </Stack>
+                  ) : null}
+                  <Stack gap={2} direction="row">
+                    <Typography variant="subtitle2">계정 상태</Typography>
+                    <Typography variant="body2">{selected.accountStatus}</Typography>
+                  </Stack>
                 </Stack>
-              </Box>
+              </Stack>
               <Divider />
-              <Box>
-                <Typography fontWeight={700} sx={{ mb: 1 }}>
+              <Stack gap={2}>
+                <Typography variant="h6" component="h2">
                   사이트 가입 요약
                 </Typography>
-                <Stack direction="row" spacing={3}>
-                  <Typography>가입한 사이트 수: {selected.joinedSiteCount}</Typography>
-                  <Typography>가입 승인 사이트 수: {selected.approvedSiteCount}</Typography>
-                  <Typography>비승인 사이트 수: {selected.notApprovedSiteCount}</Typography>
+                <Stack gap={5} direction="row">
+                  <Stack gap={1} direction="row">
+                    <Typography variant="subtitle2">가입한 사이트 수</Typography>
+                    <Typography variant="body2">{selected.joinedSiteCount} 개</Typography>
+                  </Stack>
+                  <Stack gap={1} direction="row">
+                    <Typography variant="subtitle2">가입 승인 사이트 수</Typography>
+                    <Typography variant="body2">{selected.approvedSiteCount} 개</Typography>
+                  </Stack>
+                  <Stack gap={1} direction="row">
+                    <Typography variant="subtitle2">비승인 사이트 수</Typography>
+                    <Typography variant="body2">{selected.notApprovedSiteCount} 개</Typography>
+                  </Stack>
                 </Stack>
-              </Box>
-              <Box>
-                <Typography fontWeight={700} sx={{ mb: 1 }}>
+              </Stack>
+              <Divider />
+              <Stack gap={2}>
+                <Typography variant="h6" component="h2">
                   가입한 블로그/커뮤니티 목록
                 </Typography>
                 <Table size="small">
@@ -185,7 +215,7 @@ export default function MembersPage() {
                     ))}
                   </TableBody>
                 </Table>
-              </Box>
+              </Stack>
             </Stack>
           )}
         </DialogContent>
