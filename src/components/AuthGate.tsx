@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Box } from '@mui/material';
-import { getSupabaseBrowser } from '@/lib/supabase';
 import LoadingBox from './LoadingBox';
 
 type GateState = 'checking' | 'ready';
@@ -14,35 +13,42 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GateState>('checking');
 
   useEffect(() => {
-    const supabase = getSupabaseBrowser();
-    let alive = true;
+    const controller = new AbortController();
 
-    supabase.auth.getSession().then((result) => {
-      if (!alive) return;
-      const session = result.data.session;
+    setState('checking');
 
-      if (!session && pathname !== '/login') {
-        router.replace('/login');
-        return;
-      }
+    fetch('/api/auth/me', {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok && pathname !== '/login') {
+          router.replace('/login');
+          return;
+        }
 
-      if (session && pathname === '/login') {
-        router.replace('/dashboard');
-        return;
-      }
+        if (response.ok && pathname === '/login') {
+          router.replace('/dashboard');
+          return;
+        }
 
-      setState('ready');
-    });
+        setState('ready');
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
 
-    const listener = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && pathname !== '/login') {
-        router.replace('/login');
-      }
-    });
+        if (pathname !== '/login') {
+          router.replace('/login');
+          return;
+        }
+
+        setState('ready');
+      });
 
     return () => {
-      alive = false;
-      listener.data.subscription.unsubscribe();
+      controller.abort();
     };
   }, [pathname, router]);
 

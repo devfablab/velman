@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       id: row.id,
       createdAt: row.created_at,
       approvedAt: row.approved_at,
-      buyerEmail: decryptNullable(buyer?.payment_email) || null,
+      buyerEmail: decryptNullable(buyer?.payment_email, auth.mode) || null,
       buyerName: buyer?.user_name || null,
       siteLabel: siteMap.get(row.id) || null,
       amount: Number(row.amount || 0),

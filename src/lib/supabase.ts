@@ -1,23 +1,70 @@
 import { createClient } from '@supabase/supabase-js';
 
-export function getSupabaseBrowser() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export type SupabaseEnv = 'test' | 'prod';
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase browser env is missing.');
+function getSupabaseConfig(mode: SupabaseEnv) {
+  const config =
+    mode === 'prod'
+      ? {
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_PROD,
+          supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_PROD,
+        }
+      : {
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        };
+
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    throw new Error(`Supabase ${mode} env is missing.`);
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return config;
 }
 
-export function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getSupabaseAdminConfig(mode: SupabaseEnv) {
+  const config =
+    mode === 'prod'
+      ? {
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL_PROD,
+          serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD,
+        }
+      : {
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+        };
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase admin env is missing.');
+  if (!config.supabaseUrl || !config.serviceRoleKey) {
+    throw new Error(`Supabase admin ${mode} env is missing.`);
   }
+
+  return config;
+}
+
+export function getSupabaseBrowser(mode: SupabaseEnv = 'test') {
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig(mode);
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+export function getSupabaseAuth(mode: SupabaseEnv = 'test') {
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig(mode);
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+export function getSupabaseAdmin(mode: SupabaseEnv = 'test') {
+  const { supabaseUrl, serviceRoleKey } = getSupabaseAdminConfig(mode);
 
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {

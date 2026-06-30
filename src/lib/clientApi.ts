@@ -1,25 +1,32 @@
-import { getSupabaseBrowser } from './supabase';
-
 type ErrorPayload = {
   message?: string;
 };
 
-export async function apiFetch<T extends object>(url: string, init?: RequestInit) {
-  const supabase = getSupabaseBrowser();
-  const sessionResult = await supabase.auth.getSession();
-  const accessToken = sessionResult.data.session?.access_token;
+async function parseJson<T extends object>(response: Response) {
+  return (await response.json()) as T | ErrorPayload;
+}
 
-  const headers = new Headers(init?.headers);
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
-
-  const response = await fetch(url, {
-    ...init,
-    headers,
+async function refreshSession() {
+  const response = await fetch('/api/auth/me', {
+    credentials: 'include',
   });
 
-  const payload = (await response.json()) as T | ErrorPayload;
+  return response.ok;
+}
+
+export async function apiFetch<T extends object>(url: string, init?: RequestInit) {
+  const requestInit: RequestInit = {
+    ...init,
+    credentials: 'include',
+  };
+
+  let response = await fetch(url, requestInit);
+
+  if (response.status === 401 && (await refreshSession())) {
+    response = await fetch(url, requestInit);
+  }
+
+  const payload = await parseJson<T>(response);
 
   if (!response.ok) {
     const message = 'message' in payload && payload.message ? payload.message : '요청 처리에 실패했습니다.';

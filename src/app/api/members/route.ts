@@ -54,8 +54,8 @@ export async function GET(request: NextRequest) {
     return {
       id: row.id,
       particleId: row.user_id,
-      email: decrypt(row.email),
-      userName: decrypt(row.user_name),
+      email: decrypt(row.email, auth.mode),
+      userName: decrypt(row.user_name, auth.mode),
       createdAt: row.created_at,
       birthDate,
       isMinor: adult === null ? null : !adult,

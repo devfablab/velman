@@ -1,20 +1,21 @@
 import crypto from 'crypto';
+import { type SupabaseEnv } from './supabase';
 import { normalizeText } from './utils';
 
 const algorithm = 'aes-256-gcm';
 
-function getEncryptionKey() {
-  const encryptionSecret = process.env.ENCRYPTION_SECRET;
+function getEncryptionKey(mode: SupabaseEnv = 'test') {
+  const encryptionSecret = mode === 'prod' ? process.env.ENCRYPTION_SECRET_PROD : process.env.ENCRYPTION_SECRET;
 
   if (!encryptionSecret) {
-    throw new Error('ENCRYPTION_SECRET가 설정되지 않았습니다.');
+    throw new Error(`ENCRYPTION_SECRET${mode === 'prod' ? '_PROD' : ''}가 설정되지 않았습니다.`);
   }
 
   return crypto.createHash('sha256').update(encryptionSecret).digest();
 }
 
-export function decrypt(value: string) {
-  const encryptionKey = getEncryptionKey();
+export function decrypt(value: string, mode: SupabaseEnv = 'test') {
+  const encryptionKey = getEncryptionKey(mode);
 
   const separatedValue = value.split(':');
 
@@ -35,7 +36,7 @@ export function decrypt(value: string) {
   return decryptedBuffer.toString('utf8');
 }
 
-export function decryptNullable(value: string | null | undefined) {
+export function decryptNullable(value: string | null | undefined, mode: SupabaseEnv = 'test') {
   const normalizedValue = normalizeText(value);
 
   if (!normalizedValue) {
@@ -43,7 +44,7 @@ export function decryptNullable(value: string | null | undefined) {
   }
 
   try {
-    return decrypt(normalizedValue);
+    return decrypt(normalizedValue, mode);
   } catch {
     return '';
   }

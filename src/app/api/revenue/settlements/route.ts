@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     return {
       id: row.id,
       siteLabel: row.rhizomes?.site_label || null,
-      receiverEmail: row.particles?.email || decryptNullable(stigma?.payment_email) || null,
+      receiverEmail: row.particles?.email || decryptNullable(stigma?.payment_email, auth.mode) || null,
       receiverName: stigma?.user_name || null,
       status: row.status,
       periodStart: row.period_start,
