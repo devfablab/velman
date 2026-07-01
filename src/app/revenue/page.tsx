@@ -5,8 +5,12 @@ import {
   Alert,
   Box,
   Button,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Pagination,
   Paper,
+  Select,
   Stack,
   Tab,
   Tabs,
@@ -16,7 +20,9 @@ import {
   TableHead,
   TableRow,
   TableContainer,
+  Typography,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import { apiFetch } from '@/lib/clientApi';
 import { paymentStatusLabel, paymentTypeLabel, settlementStatusLabel } from '@/lib/labels';
 import { formatDateTime, formatMoney } from '@/lib/utils';
@@ -28,9 +34,10 @@ import StatusChip from '@/components/StatusChip';
 
 type RevenueTab = 'transactions' | 'refunds' | 'scheduled' | 'confirmed' | 'completed';
 type SettlementAction = 'confirm' | 'complete';
-type ProcessingAction = 'create' | SettlementAction;
+type ProcessingAction = 'create' | 'paymentStatement' | SettlementAction;
 type SettlementCreateResponse = { ok: true; createdCount: number };
 type SettlementActionResponse = { ok: true; updatedCount: number };
+type PaymentStatementMonthsResponse = { ok: true; months: string[] };
 
 const tabLabels: Record<RevenueTab, string> = {
   transactions: '전체 거래 내역',
@@ -40,16 +47,61 @@ const tabLabels: Record<RevenueTab, string> = {
   completed: '정산 완료',
 };
 
-function getBulkAction(tab: RevenueTab): SettlementAction | null {
+function getSettlementAction(tab: RevenueTab): SettlementAction | null {
   if (tab === 'scheduled') return 'confirm';
   if (tab === 'confirmed') return 'complete';
   return null;
 }
 
-function getBulkActionLabel(tab: RevenueTab) {
+function getSettlementActionLabel(tab: RevenueTab) {
   if (tab === 'scheduled') return '전체 정산 확정';
   if (tab === 'confirmed') return '전체 정산 완료 처리';
   return '';
+}
+
+function getFilenameFromContentDisposition(contentDisposition: string | null, fallback: string) {
+  if (!contentDisposition) return fallback;
+
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+  if (encodedMatch?.[1]) return decodeURIComponent(encodedMatch[1]);
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/);
+  if (plainMatch?.[1]) return plainMatch[1];
+
+  return fallback;
+}
+
+async function getDownloadErrorMessage(response: Response) {
+  const contentType = response.headers.get('Content-Type') || '';
+
+  if (!contentType.includes('application/json')) {
+    return '파일 다운로드에 실패했습니다.';
+  }
+
+  const payload = (await response.json()) as { message?: string };
+
+  return payload.message || '파일 다운로드에 실패했습니다.';
+}
+
+async function downloadExcel(url: string, init: RequestInit, fallbackFilename: string) {
+  const response = await fetch(url, {
+    ...init,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(await getDownloadErrorMessage(response));
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = getFilenameFromContentDisposition(response.headers.get('Content-Disposition'), fallbackFilename);
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export default function RevenuePage() {
@@ -60,12 +112,27 @@ export default function RevenuePage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [processingAction, setProcessingAction] = useState<ProcessingAction | null>(null);
+  const [paymentStatementMonths, setPaymentStatementMonths] = useState<string[]>([]);
+  const [paymentStatementMonth, setPaymentStatementMonth] = useState('');
 
   const isSettlementTab = useMemo(() => ['scheduled', 'confirmed', 'completed'].includes(tab), [tab]);
-  const bulkAction = getBulkAction(tab);
+  const settlementAction = getSettlementAction(tab);
   const total = isSettlementTab ? settlements?.total : transactions?.total;
   const pageSize = isSettlementTab ? settlements?.pageSize : transactions?.pageSize;
   const pageCount = Math.max(Math.ceil((total || 0) / (pageSize || 20)), 1);
+
+  const loadPaymentStatementMonths = useCallback(async () => {
+    try {
+      const payload = await apiFetch<PaymentStatementMonthsResponse>(
+        '/api/revenue/settlements/payment-statement?mode=months',
+      );
+      setPaymentStatementMonths(payload.months);
+      setPaymentStatementMonth((current) => current || payload.months[0] || '');
+    } catch {
+      setPaymentStatementMonths([]);
+      setPaymentStatementMonth('');
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setErrorMessage('');
@@ -97,6 +164,12 @@ export default function RevenuePage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (tab === 'completed') {
+      void loadPaymentStatementMonths();
+    }
+  }, [loadPaymentStatementMonths, tab]);
 
   const handleTabChange = (_event: SyntheticEvent, value: RevenueTab) => {
     setTab(value);
@@ -137,12 +210,29 @@ export default function RevenuePage() {
     }
   };
 
-  const handleBulkActionClick = async (action: SettlementAction) => {
+  const handleSettlementActionClick = async (action: SettlementAction) => {
     setProcessingAction(action);
     setErrorMessage('');
     setSuccessMessage('');
 
     try {
+      if (action === 'complete') {
+        await downloadExcel(
+          '/api/revenue/settlements',
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ action }),
+          },
+          '대량이체.xlsx',
+        );
+        setSuccessMessage('정산 완료 처리하고 대량이체 파일을 다운로드했습니다.');
+        await reloadFirstPage();
+        return;
+      }
+
       const payload = await apiFetch<SettlementActionResponse>('/api/revenue/settlements', {
         method: 'PATCH',
         headers: {
@@ -151,14 +241,35 @@ export default function RevenuePage() {
         body: JSON.stringify({ action }),
       });
 
-      setSuccessMessage(
-        action === 'confirm'
-          ? `정산 ${payload.updatedCount}건을 확정 처리했습니다.`
-          : `정산 ${payload.updatedCount}건을 완료 처리했습니다.`,
-      );
+      setSuccessMessage(`정산 ${payload.updatedCount}건을 확정 처리했습니다.`);
       await reloadFirstPage();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '정산 처리에 실패했습니다.');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handlePaymentStatementMonthChange = (event: SelectChangeEvent) => {
+    setPaymentStatementMonth(event.target.value);
+  };
+
+  const handlePaymentStatementDownloadClick = async () => {
+    if (!paymentStatementMonth) return;
+
+    setProcessingAction('paymentStatement');
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      await downloadExcel(
+        `/api/revenue/settlements/payment-statement?month=${encodeURIComponent(paymentStatementMonth)}`,
+        { method: 'GET' },
+        `간이지급명세서_${paymentStatementMonth}.xlsx`,
+      );
+      setSuccessMessage('간이지급명세서 파일을 다운로드했습니다.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '간이지급명세서 다운로드에 실패했습니다.');
     } finally {
       setProcessingAction(null);
     }
@@ -181,28 +292,58 @@ export default function RevenuePage() {
       {successMessage ? <Alert severity="success">{successMessage}</Alert> : null}
 
       {tab === 'scheduled' || tab === 'confirmed' ? (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
           {tab === 'scheduled' ? (
             <Button
               type="button"
-              variant="contained"
+              variant="outlined"
               disabled={processingAction !== null}
               onClick={() => void handleCreateSettlementsClick()}
             >
-              {processingAction === 'create' ? '생성 중' : '정산 예정 업데이트'}
+              {processingAction === 'create' ? '생성 중' : '정산 예정 생성'}
             </Button>
           ) : null}
-          {bulkAction ? (
+          {settlementAction ? (
             <Button
               type="button"
               variant="contained"
               disabled={processingAction !== null || !settlements || settlements.items.length === 0}
-              onClick={() => void handleBulkActionClick(bulkAction)}
+              onClick={() => void handleSettlementActionClick(settlementAction)}
             >
-              {processingAction === bulkAction ? '처리 중' : getBulkActionLabel(tab)}
+              {processingAction === settlementAction ? '처리 중' : getSettlementActionLabel(tab)}
             </Button>
           ) : null}
         </Box>
+      ) : null}
+
+      {tab === 'completed' ? (
+        <Paper>
+          <Stack gap={1} alignItems="center" justifyContent="flex-end" direction="row">
+            <Typography variant="subtitle2">간이지급명세서</Typography>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <Select
+                labelId="payment-statement-month-label"
+                value={paymentStatementMonth}
+                disabled={processingAction !== null || paymentStatementMonths.length === 0}
+                onChange={handlePaymentStatementMonthChange}
+              >
+                {paymentStatementMonths.map((month) => (
+                  <MenuItem key={month} value={month}>
+                    {month}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              type="button"
+              variant="contained"
+              disabled={processingAction !== null || !paymentStatementMonth}
+              onClick={() => void handlePaymentStatementDownloadClick()}
+            >
+              {processingAction === 'paymentStatement' ? '다운로드 중' : '다운로드'}
+            </Button>
+          </Stack>
+        </Paper>
       ) : null}
 
       {isSettlementTab ? (
@@ -229,7 +370,7 @@ export default function RevenuePage() {
                 {settlements.items.map((row) => (
                   <TableRow key={row.id} hover>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.siteLabel || '-'}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.receiverEmail || '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.receiverEmail || row.receiverName || '-'}</TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {formatDateTime(row.periodStart)} ~ {formatDateTime(row.periodEnd)}
                     </TableCell>

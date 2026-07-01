@@ -55,6 +55,8 @@ type PaymentRow = {
   tx_no: string | null;
   approved_at: string | null;
   created_at: string;
+  status: string;
+  refunded_at: string | null;
 };
 
 type PaymentSplitRow = {
@@ -232,10 +234,7 @@ function distributeAmount(total: number, items: SettlementItemRow[], key: 'pg_fe
   const roundedTotal = roundAmount(total);
   const distributed = positiveItems.map((item, index) => {
     const usedAmount = Array.from(result.values()).reduce((sum, amount) => sum + amount, 0);
-    const amount =
-      index === positiveItems.length - 1
-        ? roundedTotal - usedAmount
-        : roundAmount((roundedTotal * toNumber(item[key])) / estimatedTotal);
+    const amount = index === positiveItems.length - 1 ? roundedTotal - usedAmount : roundAmount((roundedTotal * toNumber(item[key])) / estimatedTotal);
     result.set(item.id, amount);
 
     return amount;
@@ -274,9 +273,7 @@ async function getUnsettledSplits(supabaseAdmin: SupabaseClient) {
   const existingResult = await supabaseAdmin.from('settlement_items').select('payment_split_id');
   if (existingResult.error) return { message: existingResult.error.message };
 
-  const existingIds = new Set(
-    (existingResult.data || []).map((row: { payment_split_id: string }) => row.payment_split_id),
-  );
+  const existingIds = new Set((existingResult.data || []).map((row: { payment_split_id: string }) => row.payment_split_id));
   const splitResult = await supabaseAdmin
     .from('payment_splits')
     .select(
@@ -319,9 +316,7 @@ function buildScheduledSettlement(group: SettlementCreateGroup): SettlementInser
       const paymentAmount = toNumber(payment?.amount);
       const splitAmount = toNumber(split.amount);
       const samePaymentSplits = group.splits.filter((row) => row.payment_id === split.payment_id);
-      const fee = payment
-        ? calculatePaymentFee(paymentAmount, payment.payment_type)
-        : { feeAmount: 0, feeVatAmount: 0 };
+      const fee = payment ? calculatePaymentFee(paymentAmount, payment.payment_type) : { feeAmount: 0, feeVatAmount: 0 };
       const pgFeeAmount = isFeePayer(split, samePaymentSplits) ? fee.feeAmount : 0;
       const pgFeeVatAmount = isFeePayer(split, samePaymentSplits) ? fee.feeVatAmount : 0;
 
@@ -566,7 +561,11 @@ async function updateSettlementSummary(
   return { ok: true as const };
 }
 
-export async function confirmSettlement(supabaseAdmin: SupabaseClient, mode: SupabaseEnv, settlementId: string) {
+export async function confirmSettlement(
+  supabaseAdmin: SupabaseClient,
+  mode: SupabaseEnv,
+  settlementId: string,
+) {
   const settlement = await getSettlement(supabaseAdmin, settlementId);
   if ('message' in settlement) return settlement;
 
@@ -628,6 +627,7 @@ export async function completeSettlement(supabaseAdmin: SupabaseClient, settleme
   return { ok: true as const };
 }
 
+
 async function getSettlementIdsByStatus(supabaseAdmin: SupabaseClient, status: 'scheduled' | 'confirmed') {
   const result = await supabaseAdmin
     .from('settlements')
@@ -635,24 +635,18 @@ async function getSettlementIdsByStatus(supabaseAdmin: SupabaseClient, status: '
     .eq('status', status)
     .order('created_at', { ascending: true });
 
-  if (result.error) {
-    return { message: result.error.message };
-  }
+  if (result.error) return { message: result.error.message };
 
   return (result.data || []).map((row: { id: string }) => row.id);
 }
 
 export async function confirmScheduledSettlements(supabaseAdmin: SupabaseClient, mode: SupabaseEnv) {
   const settlementIds = await getSettlementIdsByStatus(supabaseAdmin, 'scheduled');
-  if ('message' in settlementIds) {
-    return settlementIds;
-  }
+  if ('message' in settlementIds) return settlementIds;
 
   for (const settlementId of settlementIds) {
     const result = await confirmSettlement(supabaseAdmin, mode, settlementId);
-    if ('message' in result) {
-      return result;
-    }
+    if ('message' in result) return result;
   }
 
   return { ok: true as const, updatedCount: settlementIds.length };
@@ -660,15 +654,11 @@ export async function confirmScheduledSettlements(supabaseAdmin: SupabaseClient,
 
 export async function completeConfirmedSettlements(supabaseAdmin: SupabaseClient) {
   const settlementIds = await getSettlementIdsByStatus(supabaseAdmin, 'confirmed');
-  if ('message' in settlementIds) {
-    return settlementIds;
-  }
+  if ('message' in settlementIds) return settlementIds;
 
   for (const settlementId of settlementIds) {
     const result = await completeSettlement(supabaseAdmin, settlementId);
-    if ('message' in result) {
-      return result;
-    }
+    if ('message' in result) return result;
   }
 
   return { ok: true as const, updatedCount: settlementIds.length };

@@ -1,15 +1,15 @@
 import { NextRequest } from 'next/server';
+import { decrypt, decryptNullable } from '@/lib/decrypt';
 import { errorResponse, getPageParams, getSearchValue, jsonResponse, requireAdmin } from '@/lib/api';
 import {
   completeConfirmedSettlements,
-  completeSettlement,
   confirmScheduledSettlements,
-  confirmSettlement,
   createScheduledSettlements,
-  parseSettlementActionBody,
 } from '@/lib/settlements';
+import { createTransferExcel } from '@/lib/settlementExcels';
 import type { SettlementRow, SettlementStatus, TablePage } from '@/lib/types';
-import { decryptNullable } from '@/lib/decrypt';
+
+export const runtime = 'nodejs';
 
 type SettlementDbRow = {
   id: string;
@@ -31,6 +31,19 @@ type SettlementDbRow = {
 };
 
 type StigmaRow = { user_id: string; user_name: string; payment_email: string };
+
+function excelResponse(buffer: Buffer, filename: string) {
+  const body = new Uint8Array(buffer.length);
+  body.set(buffer);
+
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Cache-Control': 'no-store',
+    },
+  });
+}
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin(request);
@@ -67,7 +80,7 @@ export async function GET(request: NextRequest) {
       id: row.id,
       siteLabel: row.rhizomes?.site_label || null,
       receiverEmail: row.particles?.email || decryptNullable(stigma?.payment_email, auth.mode) || null,
-      receiverName: stigma?.user_name || null,
+      receiverName: stigma?.user_name ? decrypt(stigma.user_name, auth.mode) : null,
       status: row.status,
       periodStart: row.period_start,
       periodEnd: row.period_end,
@@ -110,16 +123,19 @@ export async function PATCH(request: NextRequest) {
 
   if (body.action === 'confirm') {
     const result = await confirmScheduledSettlements(auth.supabaseAdmin, auth.mode);
-    if ('message' in result) return errorResponse(result.message, 400);
+    if ('message' in result && result.message) return errorResponse(result.message, 400);
 
     return jsonResponse(result);
   }
 
   if (body.action === 'complete') {
+    const excel = await createTransferExcel(auth.supabaseAdmin, auth.mode);
+    if ('message' in excel) return errorResponse(excel.message, 400);
+
     const result = await completeConfirmedSettlements(auth.supabaseAdmin);
     if ('message' in result) return errorResponse(result.message, 400);
 
-    return jsonResponse(result);
+    return excelResponse(excel.buffer, excel.filename);
   }
 
   return errorResponse('정산 처리 유형이 올바르지 않습니다.', 400);
