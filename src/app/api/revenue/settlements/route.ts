@@ -1,5 +1,13 @@
 import { NextRequest } from 'next/server';
-import { getPageParams, getSearchValue, jsonResponse, requireAdmin } from '@/lib/api';
+import { errorResponse, getPageParams, getSearchValue, jsonResponse, requireAdmin } from '@/lib/api';
+import {
+  completeConfirmedSettlements,
+  completeSettlement,
+  confirmScheduledSettlements,
+  confirmSettlement,
+  createScheduledSettlements,
+  parseSettlementActionBody,
+} from '@/lib/settlements';
 import type { SettlementRow, SettlementStatus, TablePage } from '@/lib/types';
 import { decryptNullable } from '@/lib/decrypt';
 
@@ -82,4 +90,37 @@ export async function GET(request: NextRequest) {
   };
 
   return jsonResponse(payload);
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
+  const result = await createScheduledSettlements(auth.supabaseAdmin);
+  if ('message' in result) return errorResponse(result.message, 400);
+
+  return jsonResponse(result);
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAdmin(request);
+  if (!auth.ok) return auth.response;
+
+  const body = (await request.json()) as { action?: string };
+
+  if (body.action === 'confirm') {
+    const result = await confirmScheduledSettlements(auth.supabaseAdmin, auth.mode);
+    if ('message' in result) return errorResponse(result.message, 400);
+
+    return jsonResponse(result);
+  }
+
+  if (body.action === 'complete') {
+    const result = await completeConfirmedSettlements(auth.supabaseAdmin);
+    if ('message' in result) return errorResponse(result.message, 400);
+
+    return jsonResponse(result);
+  }
+
+  return errorResponse('정산 처리 유형이 올바르지 않습니다.', 400);
 }

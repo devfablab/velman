@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
+  Button,
   Pagination,
   Paper,
   Stack,
@@ -25,6 +27,10 @@ import EmptyState from '@/components/EmptyState';
 import StatusChip from '@/components/StatusChip';
 
 type RevenueTab = 'transactions' | 'refunds' | 'scheduled' | 'confirmed' | 'completed';
+type SettlementAction = 'confirm' | 'complete';
+type ProcessingAction = 'create' | SettlementAction;
+type SettlementCreateResponse = { ok: true; createdCount: number };
+type SettlementActionResponse = { ok: true; updatedCount: number };
 
 const tabLabels: Record<RevenueTab, string> = {
   transactions: '전체 거래 내역',
@@ -34,37 +40,129 @@ const tabLabels: Record<RevenueTab, string> = {
   completed: '정산 완료',
 };
 
+function getBulkAction(tab: RevenueTab): SettlementAction | null {
+  if (tab === 'scheduled') return 'confirm';
+  if (tab === 'confirmed') return 'complete';
+  return null;
+}
+
+function getBulkActionLabel(tab: RevenueTab) {
+  if (tab === 'scheduled') return '전체 정산 확정';
+  if (tab === 'confirmed') return '전체 정산 완료 처리';
+  return '';
+}
+
 export default function RevenuePage() {
   const [tab, setTab] = useState<RevenueTab>('transactions');
   const [page, setPage] = useState(1);
   const [transactions, setTransactions] = useState<TablePage<TransactionRow> | null>(null);
   const [settlements, setSettlements] = useState<TablePage<SettlementRow> | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [processingAction, setProcessingAction] = useState<ProcessingAction | null>(null);
 
   const isSettlementTab = useMemo(() => ['scheduled', 'confirmed', 'completed'].includes(tab), [tab]);
+  const bulkAction = getBulkAction(tab);
+  const total = isSettlementTab ? settlements?.total : transactions?.total;
+  const pageSize = isSettlementTab ? settlements?.pageSize : transactions?.pageSize;
+  const pageCount = Math.max(Math.ceil((total || 0) / (pageSize || 20)), 1);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
+    setErrorMessage('');
+
     if (isSettlementTab) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettlements(null);
-      apiFetch<TablePage<SettlementRow>>(`/api/revenue/settlements?page=${page}&status=${tab}`)
-        .then(setSettlements)
-        .catch(() => setSettlements({ items: [], page, pageSize: 20, total: 0 }));
+
+      try {
+        const payload = await apiFetch<TablePage<SettlementRow>>(`/api/revenue/settlements?page=${page}&status=${tab}`);
+        setSettlements(payload);
+      } catch {
+        setSettlements({ items: [], page, pageSize: 20, total: 0 });
+      }
+
       return;
     }
 
     setTransactions(null);
-    const path = tab === 'refunds' ? 'refunds' : 'transactions';
-    apiFetch<TablePage<TransactionRow>>(`/api/revenue/${path}?page=${page}`)
-      .then(setTransactions)
-      .catch(() => setTransactions({ items: [], page, pageSize: 20, total: 0 }));
+
+    try {
+      const path = tab === 'refunds' ? 'refunds' : 'transactions';
+      const payload = await apiFetch<TablePage<TransactionRow>>(`/api/revenue/${path}?page=${page}`);
+      setTransactions(payload);
+    } catch {
+      setTransactions({ items: [], page, pageSize: 20, total: 0 });
+    }
   }, [isSettlementTab, page, tab]);
 
-  const handleTabChange = (_event: React.SyntheticEvent, value: RevenueTab) => {
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const handleTabChange = (_event: SyntheticEvent, value: RevenueTab) => {
     setTab(value);
+    setPage(1);
+    setErrorMessage('');
+    setSuccessMessage('');
+  };
+
+  const reloadFirstPage = async () => {
+    if (page === 1) {
+      await loadData();
+      return;
+    }
+
     setPage(1);
   };
 
-  const pageCount = Math.max(Math.ceil(((isSettlementTab ? settlements?.total : transactions?.total) || 0) / 20), 1);
+  const handleCreateSettlementsClick = async () => {
+    setProcessingAction('create');
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const payload = await apiFetch<SettlementCreateResponse>('/api/revenue/settlements', {
+        method: 'POST',
+      });
+
+      setSuccessMessage(
+        payload.createdCount > 0
+          ? `정산 예정 ${payload.createdCount}건을 생성했습니다.`
+          : '새로 생성할 정산 예정 데이터가 없습니다.',
+      );
+      await reloadFirstPage();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '정산 예정 생성에 실패했습니다.');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handleBulkActionClick = async (action: SettlementAction) => {
+    setProcessingAction(action);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const payload = await apiFetch<SettlementActionResponse>('/api/revenue/settlements', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action }),
+      });
+
+      setSuccessMessage(
+        action === 'confirm'
+          ? `정산 ${payload.updatedCount}건을 확정 처리했습니다.`
+          : `정산 ${payload.updatedCount}건을 완료 처리했습니다.`,
+      );
+      await reloadFirstPage();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '정산 처리에 실패했습니다.');
+    } finally {
+      setProcessingAction(null);
+    }
+  };
 
   return (
     <Stack spacing={3}>
@@ -78,6 +176,34 @@ export default function RevenuePage() {
           <Tab value="completed" label="정산 완료" />
         </Tabs>
       </Paper>
+
+      {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+      {successMessage ? <Alert severity="success">{successMessage}</Alert> : null}
+
+      {tab === 'scheduled' || tab === 'confirmed' ? (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+          {tab === 'scheduled' ? (
+            <Button
+              type="button"
+              variant="contained"
+              disabled={processingAction !== null}
+              onClick={() => void handleCreateSettlementsClick()}
+            >
+              {processingAction === 'create' ? '생성 중' : '정산 예정 업데이트'}
+            </Button>
+          ) : null}
+          {bulkAction ? (
+            <Button
+              type="button"
+              variant="contained"
+              disabled={processingAction !== null || !settlements || settlements.items.length === 0}
+              onClick={() => void handleBulkActionClick(bulkAction)}
+            >
+              {processingAction === bulkAction ? '처리 중' : getBulkActionLabel(tab)}
+            </Button>
+          ) : null}
+        </Box>
+      ) : null}
 
       {isSettlementTab ? (
         !settlements ? (
@@ -95,8 +221,8 @@ export default function RevenuePage() {
                   <TableCell>상태</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap', textAlign: 'right' }}>총 결제금액</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap', textAlign: 'right' }}>최종 정산금액</TableCell>
-                  <TableCell>확정일</TableCell>
-                  <TableCell>완료일</TableCell>
+                  {tab !== 'scheduled' ? <TableCell>확정일</TableCell> : null}
+                  {tab === 'completed' ? <TableCell>완료일</TableCell> : null}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -116,8 +242,12 @@ export default function RevenuePage() {
                     <TableCell sx={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {formatMoney(row.settlementAmount)}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.confirmedAt)}</TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.completedAt)}</TableCell>
+                    {tab !== 'scheduled' ? (
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.confirmedAt)}</TableCell>
+                    ) : null}
+                    {tab === 'completed' ? (
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDateTime(row.completedAt)}</TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
