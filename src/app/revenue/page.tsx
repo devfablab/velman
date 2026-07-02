@@ -162,11 +162,13 @@ export default function RevenuePage() {
   }, [isSettlementTab, page, tab]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData();
   }, [loadData]);
 
   useEffect(() => {
     if (tab === 'completed') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadPaymentStatementMonths();
     }
   }, [loadPaymentStatementMonths, tab]);

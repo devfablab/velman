@@ -7,7 +7,8 @@ async function parseJson<T extends object>(response: Response) {
 }
 
 async function refreshSession() {
-  const response = await fetch('/api/auth/me', {
+  const response = await fetch('/api/auth/session', {
+    method: 'GET',
     credentials: 'include',
   });
 

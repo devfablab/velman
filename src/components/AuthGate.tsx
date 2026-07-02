@@ -15,9 +15,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const controller = new AbortController();
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState('checking');
 
-    fetch('/api/auth/me', {
+    fetch('/api/auth/session', {
+      method: 'GET',
       credentials: 'include',
       signal: controller.signal,
     })

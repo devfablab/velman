@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { clearAdminSessionCookies, errorResponse, jsonResponse, setAdminSessionCookies } from '@/lib/api';
+import { clearAdminSessionCookies, errorResponse, jsonResponse, requireAdmin, setAdminSessionCookies } from '@/lib/api';
 import { getSupabaseAdmin, type SupabaseEnv } from '@/lib/supabase';
 import { normalizeText } from '@/lib/utils';
 
@@ -11,6 +11,23 @@ type SessionBody = {
 
 function getAuthMode(value: string | undefined): SupabaseEnv {
   return value === 'prod' ? 'prod' : 'test';
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request);
+
+  if (!auth.ok) {
+    clearAdminSessionCookies(auth.response);
+    return auth.response;
+  }
+
+  const response = jsonResponse({ admin: auth.admin });
+
+  if (auth.session) {
+    setAdminSessionCookies(response, auth.session);
+  }
+
+  return response;
 }
 
 export async function POST(request: NextRequest) {
