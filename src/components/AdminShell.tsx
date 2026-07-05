@@ -9,6 +9,7 @@ const menus = [
   { href: '/members', label: '회원 관리' },
   { href: '/sites', label: '개설된 사이트 관리' },
   { href: '/revenue', label: '수익/정산 관리' },
+  { href: '/reports', label: '신고 현황' },
   { href: '/plans', label: '요금제 설정' },
 ];
 

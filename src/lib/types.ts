@@ -97,3 +97,79 @@ export type SettlementRow = {
   completedAt: string | null;
   memo: string | null;
 };
+
+export type ReportType = 'guidelines' | 'legals' | 'rights';
+
+export type ReportStatus = 'received' | 'reviewing' | 'dismissed' | 'completed';
+
+export type ReportTargetType = 'site' | 'board' | 'post' | 'comment' | null;
+
+export type ReportDetailField = {
+  label: string;
+  value: string;
+};
+
+export type ReportCategoryCount = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+export type ReportSearchLevel = 'site' | 'board' | 'post' | 'comment';
+
+export type ReportSearchRow = {
+  id: string;
+  level: ReportSearchLevel;
+  label: string;
+  href: string | null;
+  totalCount: number;
+  categoryCounts: ReportCategoryCount[];
+  siteId: string | null;
+  siteKey: string | null;
+  siteLabel: string | null;
+  boardId: string | null;
+  boardKey: string | null;
+  boardLabel: string | null;
+  postId: string | null;
+  postSlug: string | null;
+  postSubject: string | null;
+  commentId: string | null;
+  commentPreview: string | null;
+};
+
+export type ReportSearchResult = {
+  items: ReportSearchRow[];
+};
+
+export type ReportRow = {
+  id: string;
+  reportType: ReportType;
+  createdAt: string;
+  updatedAt: string | null;
+  handledAt: string | null;
+  status: ReportStatus;
+  targetType: ReportTargetType;
+  targetId: string | null;
+  siteId: string | null;
+  siteKey: string | null;
+  siteLabel: string | null;
+  siteHref: string | null;
+  boardId: string | null;
+  boardKey: string | null;
+  boardLabel: string | null;
+  boardHref: string | null;
+  postId: string | null;
+  postSlug: string | null;
+  postSubject: string | null;
+  postHref: string | null;
+  commentId: string | null;
+  commentPreview: string | null;
+  commentHref: string | null;
+  reportUrl: string | null;
+  reporterEmail: string | null;
+  email: string | null;
+  phone: string | null;
+  categoryLabel: string;
+  summary: string | null;
+  details: ReportDetailField[];
+};

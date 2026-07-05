@@ -41,3 +41,23 @@ export function paymentTypeLabel(value: string) {
   };
   return labels[value] || value;
 }
+
+export function reportStatusLabel(value: string) {
+  const labels: Record<string, string> = {
+    received: '접수',
+    reviewing: '검토 중',
+    dismissed: '반려',
+    completed: '처리 완료',
+  };
+  return labels[value] || value;
+}
+
+export function reportTargetTypeLabel(value: string | null) {
+  const labels: Record<string, string> = {
+    site: '사이트',
+    board: '게시판',
+    post: '글',
+    comment: '댓글',
+  };
+  return value ? labels[value] || value : '외부 URL';
+}
