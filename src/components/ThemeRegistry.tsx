@@ -37,6 +37,7 @@ const theme = createTheme({
           fontFamily: 'var(--pre)',
           fontWeight: 700,
           fontVariationSettings: '"wght" 700',
+          textTransform: 'none',
         },
         contained: {
           boxShadow: 'none',
