@@ -141,6 +141,16 @@ export type ReportSearchResult = {
   items: ReportSearchRow[];
 };
 
+export type ReportAttachment = {
+  name: string;
+  path: string;
+};
+
+export type ReportDetail = {
+  label: string;
+  value: string;
+};
+
 export type ReportRow = {
   id: string;
   reportType: ReportType;
@@ -171,5 +181,6 @@ export type ReportRow = {
   phone: string | null;
   categoryLabel: string;
   summary: string | null;
-  details: ReportDetailField[];
+  attachments: ReportAttachment[];
+  details: ReportDetail[];
 };

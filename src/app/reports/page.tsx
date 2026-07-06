@@ -1,8 +1,7 @@
 'use client';
 
-import { type FormEvent, type SyntheticEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, type SyntheticEvent, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Dialog,
@@ -35,6 +34,7 @@ import { reportStatusLabel, reportTargetTypeLabel } from '@/lib/labels';
 import { reportTypeLabels } from '@/lib/reports';
 import { formatDateTime } from '@/lib/utils';
 import type {
+  ReportAttachment,
   ReportCategoryCount,
   ReportRow,
   ReportSearchLevel,
@@ -51,6 +51,7 @@ import StatusChip from '@/components/StatusChip';
 
 const reportTabs: ReportType[] = ['guidelines', 'legals', 'rights'];
 const editableStatuses: ReportStatus[] = ['received', 'reviewing', 'dismissed', 'completed'];
+
 const statusOptions: { value: ReportStatus | ''; label: string }[] = [
   { value: '', label: '전체' },
   { value: 'received', label: '접수' },
@@ -59,19 +60,76 @@ const statusOptions: { value: ReportStatus | ''; label: string }[] = [
   { value: 'completed', label: '처리 완료' },
 ];
 
+const booleanDetailLabels = new Set([
+  '공지 확인',
+  '불법정보 확인',
+  '허위조작정보 확인',
+  '불법정보/허위조작정보 고지 확인',
+  '불법촬영물 요청 확인',
+  '불법촬영물 고지 확인',
+]);
+
+type DialogRow = {
+  label: string;
+  value: ReactNode;
+  visible: boolean;
+};
+
 function openWindow(url: string | null) {
   if (!url) return;
 
   window.open(url, `velhub-report-${Date.now()}`, 'popup=yes,width=1200,height=800,left=80,top=80,noopener,noreferrer');
 }
 
-function selectedTarget(row: ReportSearchRow | null) {
-  if (!row) return null;
-  return { level: row.level, id: row.id };
+async function copyText(value: string | null) {
+  if (!value) return;
+  await navigator.clipboard.writeText(value);
 }
 
 function displayCount(value: number) {
   return `${value.toLocaleString('ko-KR')} 건`;
+}
+
+function normalizeBooleanDetailValue(value: string) {
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (normalizedValue === 'true') return '확인';
+  if (normalizedValue === 'false') return '미확인';
+
+  return value;
+}
+
+function shouldShowDetail(detail: { label: string; value: string }) {
+  if (booleanDetailLabels.has(detail.label)) return true;
+  return detail.value.trim().length > 0;
+}
+
+function getDetailValue(detail: { label: string; value: string }) {
+  if (booleanDetailLabels.has(detail.label)) {
+    return normalizeBooleanDetailValue(detail.value);
+  }
+
+  return detail.value;
+}
+
+function isVisibleText(value: string | null) {
+  return Boolean(value && value.trim());
+}
+
+async function openAttachment(reportType: ReportType, reportId: string, attachment: ReportAttachment) {
+  if (reportType !== 'legals' && reportType !== 'rights') {
+    return;
+  }
+
+  const params = new URLSearchParams({
+    reportType,
+    reportId,
+    path: attachment.path,
+  });
+
+  const result = await apiFetch<{ signedUrl: string }>(`/api/reports/attachment?${params.toString()}`);
+
+  openWindow(result.signedUrl);
 }
 
 function CategoryCounts({ counts }: { counts: ReportCategoryCount[] }) {
@@ -128,9 +186,7 @@ function SearchResultTable({
                   <Button type="button" size="small" onClick={() => openWindow(row.href)}>
                     보기
                   </Button>
-                ) : (
-                  '-'
-                )}
+                ) : null}
               </TableCell>
             </TableRow>
           ))}
@@ -141,13 +197,212 @@ function SearchResultTable({
 }
 
 function TargetLink({ label, href }: { label: string | null; href: string | null }) {
-  if (!label) return <>-</>;
+  if (!label) return null;
   if (!href) return <>{label}</>;
 
   return (
     <Button type="button" size="small" onClick={() => openWindow(href)} sx={{ minWidth: 0, p: 0 }}>
       {label}
     </Button>
+  );
+}
+
+function ReportUrlValue({ url, onCopied }: { url: string | null; onCopied: () => void }) {
+  if (!url) return null;
+
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+        {url}
+      </Typography>
+      <Button
+        type="button"
+        size="small"
+        variant="outlined"
+        onClick={async () => {
+          await copyText(url);
+          onCopied();
+        }}
+        sx={{ whiteSpace: 'nowrap' }}
+      >
+        복사
+      </Button>
+    </Stack>
+  );
+}
+
+function ReportAttachments({
+  report,
+  onOpen,
+}: {
+  report: ReportRow;
+  onOpen: (reportType: ReportType, reportId: string, attachment: ReportAttachment) => void;
+}) {
+  if (report.reportType !== 'legals' && report.reportType !== 'rights') {
+    return null;
+  }
+
+  if (report.attachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <Stack spacing={1}>
+      {report.attachments.map((attachment) => (
+        <Stack key={attachment.path} direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+            {attachment.name}
+          </Typography>
+          <Button
+            type="button"
+            size="small"
+            variant="outlined"
+            onClick={() => onOpen(report.reportType, report.id, attachment)}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            보기
+          </Button>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function ReportDialogRows({
+  report,
+  onCopied,
+  onAttachmentOpen,
+}: {
+  report: ReportRow;
+  onCopied: () => void;
+  onAttachmentOpen: (reportType: ReportType, reportId: string, attachment: ReportAttachment) => void;
+}) {
+  const detailRows: DialogRow[] = report.details.filter(shouldShowDetail).map((detail) => ({
+    label: detail.label,
+    value: getDetailValue(detail),
+    visible: true,
+  }));
+
+  const rows: DialogRow[] = [
+    {
+      label: '신고 유형',
+      value: reportTypeLabels[report.reportType],
+      visible: true,
+    },
+    {
+      label: '신고 대상',
+      value: reportTargetTypeLabel(report.targetType),
+      visible: true,
+    },
+    {
+      label: '신고 분류',
+      value: report.categoryLabel,
+      visible: isVisibleText(report.categoryLabel),
+    },
+    {
+      label: '처리 상태',
+      value: reportStatusLabel(report.status),
+      visible: true,
+    },
+    {
+      label: '접수일',
+      value: formatDateTime(report.createdAt),
+      visible: true,
+    },
+    {
+      label: '수정일',
+      value: report.updatedAt ? formatDateTime(report.updatedAt) : null,
+      visible: isVisibleText(report.updatedAt),
+    },
+    {
+      label: '처리일',
+      value: report.handledAt ? formatDateTime(report.handledAt) : null,
+      visible: isVisibleText(report.handledAt),
+    },
+    {
+      label: '신고자',
+      value: report.reporterEmail,
+      visible: isVisibleText(report.reporterEmail),
+    },
+    {
+      label: '입력 이메일',
+      value: report.email,
+      visible: isVisibleText(report.email),
+    },
+    {
+      label: '연락처',
+      value: report.phone,
+      visible: isVisibleText(report.phone),
+    },
+    {
+      label: '사이트',
+      value: <TargetLink label={report.siteLabel} href={report.siteHref} />,
+      visible: isVisibleText(report.siteLabel),
+    },
+    {
+      label: '게시판',
+      value: <TargetLink label={report.boardLabel} href={report.boardHref} />,
+      visible: isVisibleText(report.boardLabel),
+    },
+    {
+      label: '글',
+      value: <TargetLink label={report.postSubject} href={report.postHref} />,
+      visible: isVisibleText(report.postSubject),
+    },
+    {
+      label: '댓글',
+      value: <TargetLink label={report.commentPreview} href={report.commentHref} />,
+      visible: isVisibleText(report.commentPreview),
+    },
+    {
+      label: '신고대상 URL',
+      value: <ReportUrlValue url={report.reportUrl} onCopied={onCopied} />,
+      visible: isVisibleText(report.reportUrl),
+    },
+    ...detailRows,
+    {
+      label: '첨부파일',
+      value: <ReportAttachments report={report} onOpen={onAttachmentOpen} />,
+      visible: (report.reportType === 'legals' || report.reportType === 'rights') && report.attachments.length > 0,
+    },
+  ];
+
+  const visibleRows = rows.filter((row) => row.visible);
+
+  if (visibleRows.length === 0) {
+    return <Typography variant="body2">신고 상세내용이 없습니다.</Typography>;
+  }
+
+  return (
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <TableBody>
+          {visibleRows.map((row, index) => (
+            <TableRow key={`${row.label}-${index}`}>
+              <TableCell
+                component="th"
+                scope="row"
+                sx={{
+                  width: 160,
+                  whiteSpace: 'nowrap',
+                  fontWeight: 700,
+                }}
+              >
+                {row.label}
+              </TableCell>
+              <TableCell
+                sx={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {row.value}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -173,21 +428,15 @@ export default function ReportsPage() {
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
-  const currentTarget = selectedTarget(selectedComment || selectedPost || selectedBoard || selectedSite);
   const selectedSearch = selectedComment || selectedPost || selectedBoard || selectedSite;
   const pageCount = useMemo(() => Math.max(Math.ceil((data?.total || 0) / (data?.pageSize || 20)), 1), [data]);
 
-  const loadReports = (targetPage: number, reportType = tab, statusValue = status, target = currentTarget) => {
+  const loadReports = (targetPage: number, reportType = tab, statusValue = status) => {
     setData(null);
 
     const params = new URLSearchParams({ page: String(targetPage), type: reportType });
 
     if (statusValue) params.set('status', statusValue);
-
-    if (target) {
-      params.set('targetLevel', target.level);
-      params.set('targetId', target.id);
-    }
 
     apiFetch<TablePage<ReportRow>>(`/api/reports?${params.toString()}`)
       .then(setData)
@@ -198,7 +447,7 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadReports(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, tab, status, selectedSite, selectedBoard, selectedPost, selectedComment]);
+  }, [page, tab, status]);
 
   const resetSearch = () => {
     setSiteRows([]);
@@ -320,30 +569,30 @@ export default function ReportsPage() {
       setSelectedBoard(null);
       setSelectedPost(null);
       setSelectedComment(null);
-      setPage(1);
     }
 
     if (row.level === 'board') {
       setSelectedBoard(row);
       setSelectedPost(null);
       setSelectedComment(null);
-      setPage(1);
     }
 
     if (row.level === 'post') {
       setSelectedPost(row);
       setSelectedComment(null);
-      setPage(1);
     }
 
     if (row.level === 'comment') {
       setSelectedComment(row);
-      setPage(1);
     }
   };
 
   const handleStatusSelectChange = (event: SelectChangeEvent<ReportStatus>) => {
     setEditingStatus(event.target.value as ReportStatus);
+  };
+
+  const handleAttachmentOpen = (reportType: ReportType, reportId: string, attachment: ReportAttachment) => {
+    void openAttachment(reportType, reportId, attachment);
   };
 
   return (
@@ -541,19 +790,33 @@ export default function ReportsPage() {
                     <TargetLink label={report.commentPreview} href={report.commentHref} />
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{report.categoryLabel}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{report.reporterEmail || report.email || '-'}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{report.reporterEmail || report.email}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    <TargetLink label={report.reportUrl} href={report.reportUrl} />
+                    <ReportUrlValue
+                      url={report.reportUrl}
+                      onCopied={() => setSnackbar('신고대상 URL을 복사했습니다.')}
+                    />
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    <Button
-                      type="button"
-                      size="small"
-                      variant="outlined"
-                      onClick={() => handleOpenStatusDialog(report)}
-                    >
-                      상태 변경
-                    </Button>
+                    {report.reportType === 'guidelines' ? (
+                      <Button
+                        type="button"
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleOpenStatusDialog(report)}
+                      >
+                        상태 변경
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleOpenStatusDialog(report)}
+                      >
+                        신고 내역/처리
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -565,31 +828,34 @@ export default function ReportsPage() {
         </TableContainer>
       )}
 
-      <Dialog open={Boolean(editingReport)} onClose={() => setEditingReport(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>처리 상태 변경</DialogTitle>
+      <Dialog open={Boolean(editingReport)} onClose={() => setEditingReport(null)} maxWidth="md" fullWidth>
+        <DialogTitle>{editingReport?.reportType === 'guidelines' ? '처리 상태 변경' : '신고 내역/처리'}</DialogTitle>
         <DialogContent dividers>
-          <Stack spacing={2}>
-            <Typography variant="body2">
-              {editingReport
-                ? `${reportTargetTypeLabel(editingReport.targetType)} / ${editingReport.categoryLabel}`
-                : ''}
-            </Typography>
-            <FormControl fullWidth size="small">
-              <InputLabel id="edit-report-status-label">처리 상태</InputLabel>
-              <Select
-                labelId="edit-report-status-label"
-                label="처리 상태"
-                value={editingStatus}
-                onChange={handleStatusSelectChange}
-              >
-                {editableStatuses.map((nextStatus) => (
-                  <MenuItem key={nextStatus} value={nextStatus}>
-                    {reportStatusLabel(nextStatus)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
+          {editingReport ? (
+            <Stack spacing={2}>
+              <ReportDialogRows
+                report={editingReport}
+                onCopied={() => setSnackbar('신고대상 URL을 복사했습니다.')}
+                onAttachmentOpen={handleAttachmentOpen}
+              />
+
+              <FormControl fullWidth size="small">
+                <InputLabel id="edit-report-status-label">처리 상태</InputLabel>
+                <Select
+                  labelId="edit-report-status-label"
+                  label="처리 상태"
+                  value={editingStatus}
+                  onChange={handleStatusSelectChange}
+                >
+                  {editableStatuses.map((nextStatus) => (
+                    <MenuItem key={nextStatus} value={nextStatus}>
+                      {reportStatusLabel(nextStatus)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button type="button" size="small" onClick={() => setEditingReport(null)} disabled={saving}>
@@ -610,9 +876,9 @@ export default function ReportsPage() {
       <Snackbar
         open={Boolean(snackbar)}
         autoHideDuration={2700}
-        onClose={() => setSnackbar('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         message={snackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        onClose={() => setSnackbar('')}
       />
     </Stack>
   );

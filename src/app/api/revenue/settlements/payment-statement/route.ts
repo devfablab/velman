@@ -6,7 +6,8 @@ import { normalizeText } from '@/lib/utils';
 export const runtime = 'nodejs';
 
 function excelResponse(buffer: Buffer, filename: string) {
-  return new Response(buffer, {
+  const body = new Uint8Array(buffer);
+  return new Response(body, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,

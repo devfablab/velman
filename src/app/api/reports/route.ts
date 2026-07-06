@@ -25,8 +25,9 @@ import {
   truncateText,
 } from '@/lib/reports';
 import type {
+  ReportAttachment,
   ReportCategoryCount,
-  ReportDetailField,
+  ReportDetail,
   ReportRow,
   ReportSearchLevel,
   ReportSearchResult,
@@ -118,6 +119,18 @@ type ReportPatchBody = {
   status?: string;
 };
 
+type AttachmentRecord = {
+  name?: unknown;
+  filename?: unknown;
+  fileName?: unknown;
+  originalName?: unknown;
+  path?: unknown;
+  filePath?: unknown;
+  storagePath?: unknown;
+  key?: unknown;
+  url?: unknown;
+};
+
 function uniqueIds(values: (string | null | undefined)[]) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
@@ -127,6 +140,10 @@ function toTargetType(value: string | null): ReportTargetType {
   return null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function stringifyValue(value: unknown) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -134,14 +151,56 @@ function stringifyValue(value: unknown) {
   return JSON.stringify(value);
 }
 
-function addDetail(details: ReportDetailField[], label: string, value: unknown) {
+function getBooleanLabel(value: boolean | null) {
+  return value === true ? '확인' : '미확인';
+}
+
+function addDetail(details: ReportDetail[], label: string, value: unknown) {
   const text = stringifyValue(value);
   if (!text) return details;
   return [...details, { label, value: text }];
 }
 
-function getAttachmentCount(value: unknown) {
-  return Array.isArray(value) ? `${value.length}개` : '';
+function addBooleanDetail(details: ReportDetail[], label: string, value: boolean | null) {
+  return [...details, { label, value: getBooleanLabel(value) }];
+}
+
+function getAttachmentText(record: AttachmentRecord, keys: (keyof AttachmentRecord)[]) {
+  const value = keys.map((key) => record[key]).find((item) => typeof item === 'string' && item.trim());
+
+  return typeof value === 'string' ? value : '';
+}
+
+function getAttachmentPath(record: AttachmentRecord) {
+  return getAttachmentText(record, ['path', 'filePath', 'storagePath', 'key', 'url']);
+}
+
+function getAttachmentName(record: AttachmentRecord, path: string) {
+  const name = getAttachmentText(record, ['name', 'filename', 'fileName', 'originalName']);
+
+  if (name) return name;
+
+  return path.split('/').pop() || path;
+}
+
+function getAttachments(value: unknown): ReportAttachment[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+
+      const record = item as AttachmentRecord;
+      const path = getAttachmentPath(record);
+
+      if (!path) return null;
+
+      return {
+        name: getAttachmentName(record, path),
+        path,
+      };
+    })
+    .filter((item): item is ReportAttachment => item !== null);
 }
 
 function getTargetSummary(row: ReportBaseRow, maps: ReportMaps) {
@@ -195,7 +254,9 @@ async function getMaps(supabaseAdmin: SupabaseClient, rows: ReportBaseRow[]): Pr
     commentIds.length
       ? supabaseAdmin.from('post_comments').select('id, site_id, board_id, post_id, content').in('id', commentIds)
       : { data: [] as CommentRow[] },
-    userIds.length ? supabaseAdmin.from('particles').select('id, email').in('id', userIds) : { data: [] as ParticleRow[] },
+    userIds.length
+      ? supabaseAdmin.from('particles').select('id, email').in('id', userIds)
+      : { data: [] as ParticleRow[] },
   ]);
 
   return {
@@ -209,6 +270,7 @@ async function getMaps(supabaseAdmin: SupabaseClient, rows: ReportBaseRow[]): Pr
 
 function mapGuidelineReport(row: GuidelineReportDbRow, maps: ReportMaps): ReportRow {
   const target = getTargetSummary(row, maps);
+
   return {
     id: row.id,
     reportType: 'guidelines',
@@ -239,6 +301,7 @@ function mapGuidelineReport(row: GuidelineReportDbRow, maps: ReportMaps): Report
     phone: null,
     categoryLabel: guidelineCategoryLabel(row.report_category),
     summary: null,
+    attachments: [],
     details: [{ label: '신고 분류', value: guidelineCategoryLabel(row.report_category) }],
   };
 }
@@ -282,6 +345,7 @@ function mapLegalReport(row: LegalReportDbRow, maps: ReportMaps): ReportRow {
     phone: row.phone,
     categoryLabel,
     summary: row.report_reason || row.report_content || row.privacy_request_reason || null,
+    attachments: getAttachments(row.attachments),
     details: [
       ...details,
       ...[
@@ -291,20 +355,26 @@ function mapLegalReport(row: LegalReportDbRow, maps: ReportMaps): ReportRow {
         ['신고 내용', row.report_content],
         ['신고 사유', row.report_reason],
         ['신고 근거', row.report_basis],
+      ].reduce<ReportDetail[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
+      ...[
         ['불법정보 확인', row.illegal_info_confirmed],
         ['허위조작정보 확인', row.false_manipulated_info_confirmed],
         ['고지 확인', row.illegal_info_notice_confirmed],
+      ].reduce<ReportDetail[]>((acc, item) => addBooleanDetail(acc, item[0] as string, item[1] as boolean | null), []),
+      ...[
         ['불법촬영물 요청 유형', joinLabels(row.filming_request_types, filmingRequestTypeLabel)],
         ['불법촬영물 사유', joinLabels(row.filming_reason_types, filmingReasonTypeLabel)],
         ['촬영 대상', row.filming_target],
+      ].reduce<ReportDetail[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
+      ...[
         ['불법촬영물 요청 확인', row.filming_request_confirmed],
         ['불법촬영물 고지 확인', row.filming_notice_confirmed],
+      ].reduce<ReportDetail[]>((acc, item) => addBooleanDetail(acc, item[0] as string, item[1] as boolean | null), []),
+      ...[
         ['개인정보 신고 대상', row.privacy_report_type ? privacyReportTypeLabel(row.privacy_report_type) : ''],
         ['노출 정보', row.exposed_information],
         ['개인정보 요청 사유', row.privacy_request_reason],
-        ['첨부파일', getAttachmentCount(row.attachments)],
-        ['신고대상 URL', row.report_url],
-      ].reduce<ReportDetailField[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
+      ].reduce<ReportDetail[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
     ],
   };
 }
@@ -312,6 +382,7 @@ function mapLegalReport(row: LegalReportDbRow, maps: ReportMaps): ReportRow {
 function mapRightReport(row: RightReportDbRow, maps: ReportMaps): ReportRow {
   const target = getTargetSummary(row, maps);
   const categoryLabel = rightReasonTypeLabel(row.reason_type);
+
   return {
     id: row.id,
     reportType: 'rights',
@@ -342,16 +413,15 @@ function mapRightReport(row: RightReportDbRow, maps: ReportMaps): ReportRow {
     phone: row.phone,
     categoryLabel,
     summary: null,
+    attachments: getAttachments(row.copyright_proof_files),
     details: [
       { label: '권리침해 유형', value: categoryLabel },
       { label: '이메일', value: row.email },
       { label: '연락처', value: row.phone },
       ...[
         ['권리자 유형', row.rights_owner_type ? rightsOwnerTypeLabel(row.rights_owner_type) : ''],
-        ['저작권 원본 URL', row.copyright_original_urls?.join(', ') || ''],
-        ['저작권 증빙파일', getAttachmentCount(row.copyright_proof_files)],
-        ['신고대상 URL', row.report_url],
-      ].reduce<ReportDetailField[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
+        ['저작권 원본 URL', row.copyright_original_urls?.join('\n') || ''],
+      ].reduce<ReportDetail[]>((acc, item) => addDetail(acc, item[0] as string, item[1]), []),
     ],
   };
 }
@@ -410,6 +480,7 @@ async function getReportCount(supabaseAdmin: SupabaseClient, reportType: ReportT
     .from(reportTableNames[reportType])
     .select('id', { count: 'exact', head: true })
     .eq(field, id);
+
   return result.count || 0;
 }
 
@@ -423,6 +494,7 @@ async function mapSiteSearchRows(supabaseAdmin: SupabaseClient, reportType: Repo
     sites.map(async (site) => {
       const categoryCounts = await getCategoryCounts(supabaseAdmin, reportType, 'site_id', site.id);
       const totalCount = await getReportCount(supabaseAdmin, reportType, 'site_id', site.id);
+
       return {
         id: site.id,
         level: 'site' as const,
@@ -444,14 +516,21 @@ async function mapSiteSearchRows(supabaseAdmin: SupabaseClient, reportType: Repo
       } satisfies ReportSearchRow;
     }),
   );
+
   return rows;
 }
 
-async function mapBoardSearchRows(supabaseAdmin: SupabaseClient, reportType: ReportType, boards: BoardRow[], site: SiteRow | null) {
+async function mapBoardSearchRows(
+  supabaseAdmin: SupabaseClient,
+  reportType: ReportType,
+  boards: BoardRow[],
+  site: SiteRow | null,
+) {
   const rows = await Promise.all(
     boards.map(async (board) => {
       const categoryCounts = await getCategoryCounts(supabaseAdmin, reportType, 'board_id', board.id);
       const totalCount = await getReportCount(supabaseAdmin, reportType, 'board_id', board.id);
+
       return {
         id: board.id,
         level: 'board' as const,
@@ -473,6 +552,7 @@ async function mapBoardSearchRows(supabaseAdmin: SupabaseClient, reportType: Rep
       } satisfies ReportSearchRow;
     }),
   );
+
   return rows;
 }
 
@@ -488,6 +568,7 @@ async function mapPostSearchRows(
       const categoryCounts = await getCategoryCounts(supabaseAdmin, reportType, 'post_id', post.id);
       const totalCount = await getReportCount(supabaseAdmin, reportType, 'post_id', post.id);
       const slug = String(post.slug);
+
       return {
         id: post.id,
         level: 'post' as const,
@@ -509,6 +590,7 @@ async function mapPostSearchRows(
       } satisfies ReportSearchRow;
     }),
   );
+
   return rows;
 }
 
@@ -526,6 +608,7 @@ async function mapCommentSearchRows(
       const totalCount = await getReportCount(supabaseAdmin, reportType, 'comment_id', comment.id);
       const slug = post?.slug === undefined || post?.slug === null ? null : String(post.slug);
       const preview = truncateText(comment.content, 70);
+
       return {
         id: comment.id,
         level: 'comment' as const,
@@ -547,24 +630,39 @@ async function mapCommentSearchRows(
       } satisfies ReportSearchRow;
     }),
   );
+
   return rows;
 }
 
 async function readSite(supabaseAdmin: SupabaseClient, siteId: string | null) {
   if (!siteId) return null;
+
   const result = await supabaseAdmin.from('rhizomes').select('id, site_key, site_label').eq('id', siteId).maybeSingle();
+
   return (result.data || null) as SiteRow | null;
 }
 
 async function readBoard(supabaseAdmin: SupabaseClient, boardId: string | null) {
   if (!boardId) return null;
-  const result = await supabaseAdmin.from('boards').select('id, site_id, board_key, board_label').eq('id', boardId).maybeSingle();
+
+  const result = await supabaseAdmin
+    .from('boards')
+    .select('id, site_id, board_key, board_label')
+    .eq('id', boardId)
+    .maybeSingle();
+
   return (result.data || null) as BoardRow | null;
 }
 
 async function readPost(supabaseAdmin: SupabaseClient, postId: string | null) {
   if (!postId) return null;
-  const result = await supabaseAdmin.from('posts').select('id, site_id, board_id, slug, subject').eq('id', postId).maybeSingle();
+
+  const result = await supabaseAdmin
+    .from('posts')
+    .select('id, site_id, board_id, slug, subject')
+    .eq('id', postId)
+    .maybeSingle();
+
   return (result.data || null) as PostRow | null;
 }
 
@@ -580,14 +678,19 @@ async function searchReports(request: NextRequest, supabaseAdmin: SupabaseClient
       .select('id, site_key, site_label')
       .ilike('site_key', `%${q}%`)
       .limit(SEARCH_LIMIT);
+
     if (result.error) return errorResponse(result.error.message, 500);
+
     const items = await mapSiteSearchRows(supabaseAdmin, reportType, (result.data || []) as SiteRow[]);
+
     return jsonResponse<ReportSearchResult>({ items });
   }
 
   if (level === 'board') {
     const siteId = getSearchValue(request, 'siteId');
+
     if (!siteId) return errorResponse('사이트를 먼저 선택하세요.', 400);
+
     const [site, boardResult] = await Promise.all([
       readSite(supabaseAdmin, siteId),
       supabaseAdmin
@@ -597,14 +700,19 @@ async function searchReports(request: NextRequest, supabaseAdmin: SupabaseClient
         .ilike('board_key', `%${q}%`)
         .limit(SEARCH_LIMIT),
     ]);
+
     if (boardResult.error) return errorResponse(boardResult.error.message, 500);
+
     const items = await mapBoardSearchRows(supabaseAdmin, reportType, (boardResult.data || []) as BoardRow[], site);
+
     return jsonResponse<ReportSearchResult>({ items });
   }
 
   if (level === 'post') {
     const boardId = getSearchValue(request, 'boardId');
+
     if (!boardId) return errorResponse('게시판을 먼저 선택하세요.', 400);
+
     const board = await readBoard(supabaseAdmin, boardId);
     const site = await readSite(supabaseAdmin, board?.site_id || null);
     const postResult = await supabaseAdmin
@@ -613,8 +721,11 @@ async function searchReports(request: NextRequest, supabaseAdmin: SupabaseClient
       .eq('board_id', boardId)
       .eq('slug', q)
       .limit(SEARCH_LIMIT);
+
     if (postResult.error) return errorResponse(postResult.error.message, 500);
+
     const items = await mapPostSearchRows(supabaseAdmin, reportType, (postResult.data || []) as PostRow[], site, board);
+
     return jsonResponse<ReportSearchResult>({ items });
   }
 
@@ -623,7 +734,9 @@ async function searchReports(request: NextRequest, supabaseAdmin: SupabaseClient
     .select('id, site_id, board_id, post_id, content')
     .eq('id', q)
     .limit(1);
+
   if (commentResult.error) return errorResponse(commentResult.error.message, 500);
+
   const comments = (commentResult.data || []) as CommentRow[];
   const comment = comments[0] || null;
   const [site, board, post] = await Promise.all([
@@ -632,6 +745,7 @@ async function searchReports(request: NextRequest, supabaseAdmin: SupabaseClient
     readPost(supabaseAdmin, comment?.post_id || null),
   ]);
   const items = await mapCommentSearchRows(supabaseAdmin, reportType, comments, site, board, post);
+
   return jsonResponse<ReportSearchResult>({ items });
 }
 
@@ -650,17 +764,54 @@ export async function GET(request: NextRequest) {
   const targetId = getSearchValue(request, 'targetId');
   const table = reportTableNames[reportType];
 
-  let query = auth.supabaseAdmin
-    .from(table)
+  type ReportListQuery = {
+    eq: (column: string, value: string) => ReportListQuery;
+    then: PromiseLike<{
+      data: unknown[] | null;
+      count: number | null;
+      error: { message: string } | null;
+    }>['then'];
+  };
+
+  const reportQuery = auth.supabaseAdmin.from(table) as unknown as {
+    select: (
+      columns: string,
+      options: { count: 'exact' },
+    ) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => {
+        range: (from: number, to: number) => ReportListQuery;
+      };
+    };
+  };
+
+  let query = reportQuery
     .select(getSelectColumns(reportType), { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  if (status) query = query.eq('status', status);
-  query = applyTargetFilter(query, targetLevel, targetId);
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  if (targetLevel && targetId) {
+    const field =
+      targetLevel === 'site'
+        ? 'site_id'
+        : targetLevel === 'board'
+          ? 'board_id'
+          : targetLevel === 'post'
+            ? 'post_id'
+            : 'comment_id';
+
+    query = query.eq(field, targetId);
+  }
 
   const result = await query;
-  if (result.error) return jsonResponse({ message: result.error.message }, { status: 500 });
+
+  if (result.error) return errorResponse(result.error.message, 500);
 
   const rows = (result.data || []) as unknown as ReportBaseRow[];
   const maps = await getMaps(auth.supabaseAdmin, rows);
@@ -679,7 +830,12 @@ export async function PATCH(request: NextRequest) {
   if (!auth.ok) return auth.response;
 
   const body = (await request.json()) as ReportPatchBody;
-  const reportType = getReportType(body.reportType);
+
+  if (body.reportType !== 'guidelines' && body.reportType !== 'legals' && body.reportType !== 'rights') {
+    return errorResponse('신고 유형이 올바르지 않습니다.', 400);
+  }
+
+  const reportType = body.reportType;
   const status = getReportStatus(body.status);
 
   if (!body.reportId) return errorResponse('신고 ID가 없습니다.', 400);
